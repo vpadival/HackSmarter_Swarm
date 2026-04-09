@@ -468,9 +468,11 @@ def run_dirsearch_tool(url: Union[str, List[str]], extensions: str = "php,html,j
                 '-e', extensions, 
                 '--format', 'json', 
                 '-o', out_file,
-                '--random-user-agent',
-                '--quiet-mode'
+                '--random-user-agent'
             ]
+            
+        if not verbose:
+            cmd.append('--quiet-mode')
             
         # Run dirsearch
         subprocess.run(
