@@ -106,6 +106,16 @@ def filter_live_targets_httpx(targets: list) -> list:
         return targets
 
 @tool
+def run_httpx_tool(targets: Union[str, List[str]]) -> List[str]:
+    """
+    Takes a single target or a list of targets (URLs/domains), 
+    probes them with httpx, and returns a list of only the live web servers.
+    Use this to verify if a target is alive before running dirsearch or wpscan.
+    """
+    target_list = [targets] if isinstance(targets, str) else targets
+    return filter_live_targets_httpx(target_list)
+
+@tool
 def format_scope_tool(scope: str) -> dict:
     """
     Analyzes the user-provided scope and categorizes it.
@@ -125,7 +135,8 @@ def format_scope_tool(scope: str) -> dict:
 def run_subfinder_tool(domain: str) -> str:
     """
     Finds subdomains for a given target domain using subfinder.
-    Returns a success message with the count of subdomains found.
+    Returns a success message with the count of subdomains found. 
+    This list should be considered the exhaustive source of truth for subdomains.
     """
     if is_already_run("subfinder", domain):
         return f"[!] Skipping subfinder for {domain} - Results already in database."
@@ -216,10 +227,12 @@ def run_nuclei_tool(targets: list) -> str:
                 'nuclei', 
                 '-je', out_file, 
                 '-severity', 'medium,high,critical',
-                '-rl', '20',          # Lowered to 20 for safety
-                '-mhe', '3',         
-                '-timeout', '5',     
-                '-retries', '1'      
+                '-exclude-tags', 'dos,fuzz',  # CRITICAL: Exclude templates that crash or overload servers
+                '-rl', '5',                   # Hard throttle: Maximum 5 requests per second 
+                '-c', '5',                    # Concurrency: Only 5 active templates at a time
+                '-timeout', '10',             # Give the smaller servers 10 seconds to reply
+                '-retries', '0',              # If a request drops, let it fail. Do NOT retry and compound the DoS.
+                '-mhe', '3'      
             ],
             input=input_data,
             capture_output=True, text=True, check=False # check=False so it doesn't crash on non-zero exits

@@ -11,7 +11,7 @@ from tools import (
     format_scope_tool, run_subfinder_tool, run_nmap_tool, run_wpscan_tool,
     run_nuclei_tool, execute_curl_request, filter_live_targets_httpx,
     run_nc_banner_grab, run_ssh_audit, run_hydra_check,
-    run_testssl_verification, run_dirsearch_tool, DB_PATH, update_db,
+    run_testssl_verification, run_dirsearch_tool, run_httpx_tool, DB_PATH, update_db,
     is_already_run, mark_as_run
 )
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -118,13 +118,24 @@ def strategy_node(state: PentestState):
 def recon_node(state: PentestState):
     print("\n--- [NODE: TACTICAL RECON] ---")
     
-    initial_recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool, run_dirsearch_tool]
+    initial_recon_tools = [
+        run_subfinder_tool, run_nmap_tool, format_scope_tool, 
+        run_wpscan_tool, run_dirsearch_tool, run_httpx_tool
+    ]
     recon_tools = filter_tools(initial_recon_tools, state.get("excluded_tools", []))
     directives = state.get("strategy_directives") or "Perform initial discovery on the target."
     
+    discovered_subdomains = state.get("subdomains", [])
+    subdomain_context = f"\nKnown/Discovered Subdomains: {', '.join(discovered_subdomains)}" if discovered_subdomains else ""
+
     system_prompt = (
         f"You are a Tactical Recon Specialist. Current objective: {directives}\n"
         "Analyze the target, find subdomains, scan for ports, and check for WordPress vulnerabilities. "
+        "CRITICAL: Do NOT guess or hallucinate subdomains. ONLY scan the primary target and subdomains "
+        "that have been explicitly discovered by subfinder or are in the known list below."
+        f"{subdomain_context}\n"
+        "Use run_httpx_tool to verify if a discovered subdomain or port is hosting a live web server "
+        "BEFORE attempting to run dirsearch or wpscan on it.\n"
         "If you identify a live web server, you should also perform directory discovery using dirsearch. "
         "When you are finished, summarize what you found."
     )
