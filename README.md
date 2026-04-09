@@ -92,7 +92,7 @@ You can exclude specific tools from the workflow using the `-x` or `--exclude` f
 # Skip Nuclei and Nmap
 python hacksmarter.py -t example.com -x nuclei,nmap
 
-# Skip WPScan and Diracan
+# Skip WPScan and Dirsearch
 python hacksmarter.py -t example.com -x wpscan,dirsearch
 ```
 
