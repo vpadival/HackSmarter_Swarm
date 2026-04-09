@@ -210,8 +210,10 @@ def run_nc_banner_grab(target: str, port: int, send_string: str = "") -> str:
     """
     try:
         # -w 2: 2 second timeout, -v: verbose, -n: no DNS
-        cmd = f"echo '{send_string}' | nc -vn -w 2 {target} {port}"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        cmd = ["nc", "-vn", "-w", "2", str(target), str(port)]
+        # Add a newline to mimic echo's default behavior
+        input_data = send_string + "\n"
+        result = subprocess.run(cmd, input=input_data, capture_output=True, text=True)
         
         output = result.stdout if result.stdout else result.stderr
         return f"NC Output for {target}:{port}:\n{output}"
