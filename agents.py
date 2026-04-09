@@ -8,7 +8,7 @@ load_dotenv()
 
 from state import PentestState
 from tools import (
-    format_scope_tool, run_subfinder_tool, run_nmap_tool,
+    format_scope_tool, run_subfinder_tool, run_nmap_tool, run_wpscan_tool,
     run_nuclei_tool, execute_curl_request, filter_live_targets_httpx,
     run_nc_banner_grab, run_ssh_audit, run_hydra_check,
     run_testssl_verification, DB_PATH, update_db
@@ -100,12 +100,12 @@ def strategy_node(state: PentestState):
 def recon_node(state: PentestState):
     print("\n--- [NODE: TACTICAL RECON] ---")
     
-    recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool]
+    recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool]
     directives = state.get("strategy_directives") or "Perform initial discovery on the target."
     
     system_prompt = (
         f"You are a Tactical Recon Specialist. Current objective: {directives}\n"
-        "Analyze the target, find subdomains, and scan for ports. "
+        "Analyze the target, find subdomains, scan for ports, and check for WordPress vulnerabilities. "
         "When you are finished, summarize what you found."
     )
 

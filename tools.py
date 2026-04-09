@@ -163,7 +163,7 @@ def run_nuclei_tool(target_url: str) -> str:
                 '-target', target_url, 
                 '-je', out_file, 
                 '-severity', 'medium,high,critical',
-                '-c', '50',          
+                '-rl', '50',          
                 '-mhe', '3',         
                 '-timeout', '5',     
                 '-retries', '1'      
@@ -298,3 +298,37 @@ def execute_curl_request(url: str, method: str = "GET", headers: dict = None, da
         return "Error: Curl request timed out."
     except Exception as e:
         return f"Error: {str(e)}"
+
+@tool
+def run_wpscan_tool(target_url: str) -> str:
+    """
+    Runs WPScan against a target URL to check for WordPress installations, 
+    vulnerabilities, and outdated plugins.
+    Args: target_url (str): The URL to scan (e.g., http://example.com)
+    """
+    print(f"[*] Recon Agent executing wpscan on {target_url}...")
+    try:
+        # Try running without update first for speed
+        result = subprocess.run(
+            ['wpscan', '--url', target_url, '--no-update', '--random-user-agent', '-e', 'vp,vt'],
+            capture_output=True, text=True
+        )
+        
+        # Check if it failed due to missing database
+        if "missing database" in (result.stdout + result.stderr).lower():
+            print("[!] WPScan database missing. Attempting update...")
+            subprocess.run(['wpscan', '--update'], capture_output=True, text=True)
+            # Retry after update
+            result = subprocess.run(
+                ['wpscan', '--url', target_url, '--no-update', '--random-user-agent', '-e', 'vp,vt'],
+                capture_output=True, text=True
+            )
+        
+        output = result.stdout if result.stdout else result.stderr
+        
+        # Return truncated output to prevent LLM context blowup
+        return f"WPScan Results for {target_url}:\n{output[:3000]}"
+    except FileNotFoundError:
+        return "[!] WPScan binary not found! Make sure it is installed and in your PATH."
+    except Exception as e:
+        return f"WPScan Error: {str(e)}"
