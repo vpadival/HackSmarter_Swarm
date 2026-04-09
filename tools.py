@@ -4,6 +4,7 @@ import json
 import re
 from langchain_core.tools import tool
 import os
+from typing import Union, List
 
 DB_PATH = "pentest_db.json"
 
@@ -28,6 +29,43 @@ def update_db(key: str, new_data: list):
     with open(DB_PATH, "w") as f:
         json.dump(db, f, indent=4)
     return db[key]
+
+def is_already_run(tool_name: str, target: str) -> bool:
+    """Checks if a tool has already been run against a target in this database."""
+    if not os.path.exists(DB_PATH):
+        return False
+    with open(DB_PATH, "r") as f:
+        try:
+            db = json.load(f)
+            # The key in tool_runs is the tool's common name
+            runs = db.get("tool_runs", {}).get(tool_name, [])
+            return target in runs
+        except json.JSONDecodeError:
+            return False
+
+def mark_as_run(tool_name: str, target: str):
+    """Marks a tool as having been run against a target."""
+    db = {"tool_runs": {}}
+    if os.path.exists(DB_PATH):
+        with open(DB_PATH, "r") as f:
+            try:
+                db = json.load(f)
+            except json.JSONDecodeError:
+                pass
+    
+    if "tool_runs" not in db:
+        db["tool_runs"] = {}
+        
+    tool_runs = db["tool_runs"]
+    if tool_name not in tool_runs:
+        tool_runs[tool_name] = []
+    
+    if target not in tool_runs[tool_name]:
+        tool_runs[tool_name].append(target)
+    
+    db["tool_runs"] = tool_runs
+    with open(DB_PATH, "w") as f:
+        json.dump(db, f, indent=4)
 
 def filter_live_targets_httpx(targets: list) -> list:
     """
@@ -89,6 +127,9 @@ def run_subfinder_tool(domain: str) -> str:
     Finds subdomains for a given target domain using subfinder.
     Returns a success message with the count of subdomains found.
     """
+    if is_already_run("subfinder", domain):
+        return f"[!] Skipping subfinder for {domain} - Results already in database."
+        
     print(f"[*] Recon Agent executing subfinder on {domain}...")
     try:
         # We REMOVED -j to support older/Kali versions of subfinder
@@ -100,6 +141,7 @@ def run_subfinder_tool(domain: str) -> str:
         output = result.stdout.strip()
         
         if not output:
+            mark_as_run("subfinder", domain)
             return f"Subfinder scan completed for {domain}. Result: 0 subdomains discovered. This is a valid result."
 
         # Parse plain text output (one subdomain per line)
@@ -107,6 +149,7 @@ def run_subfinder_tool(domain: str) -> str:
                 
         # Persist to the shared DB
         update_db("subdomains", subdomains)
+        mark_as_run("subfinder", domain)
         return f"Subfinder scan successful. Found {len(subdomains)} subdomains and added them to the database."
         
     except subprocess.CalledProcessError as e:
@@ -120,6 +163,9 @@ def run_nmap_tool(target: str) -> list:
     Runs a fast nmap port scan against a target IP or domain.
     Args: target (str): The IP or domain to scan.
     """
+    if is_already_run("nmap", target):
+        return f"[!] Skipping nmap for {target} - Results already in database."
+
     print(f"[*] Recon Agent executing nmap on {target}...")
     try:
         # Using grepable output (-oG) for easier Python parsing without external XML libraries
@@ -140,6 +186,7 @@ def run_nmap_tool(target: str) -> list:
                         open_ports.append({"target": target, "port": port_num})
                         
         update_db("open_ports", open_ports)
+        mark_as_run("nmap", target)
         return f"Successfully updated DB with {len(open_ports)} ports for {target}."
     except subprocess.CalledProcessError as e:
         return [{"error": f"Nmap failed: {e.stderr}"}]
@@ -313,6 +360,9 @@ def run_wpscan_tool(target_url: str) -> str:
     vulnerabilities, and outdated plugins.
     Args: target_url (str): The URL to scan (e.g., http://example.com)
     """
+    if is_already_run("wpscan", target_url):
+        return f"[!] Skipping wpscan for {target_url} - Results already in database."
+
     print(f"[*] Recon Agent executing wpscan on {target_url}...")
     try:
         wpscan_token = os.environ.get("WPSCAN_API_TOKEN")
@@ -336,6 +386,9 @@ def run_wpscan_tool(target_url: str) -> str:
         
         output = result.stdout if result.stdout else result.stderr
         
+        # Mark as run
+        mark_as_run("wpscan", target_url)
+
         # Return truncated output to prevent LLM context blowup
         return f"WPScan Results for {target_url}:\n{output[:3000]}"
     except FileNotFoundError:
@@ -344,29 +397,42 @@ def run_wpscan_tool(target_url: str) -> str:
         return f"WPScan Error: {str(e)}"
 
 @tool
-def run_dirsearch_tool(url: str, extensions: str = "php,html,js,txt") -> str:
+def run_dirsearch_tool(url: Union[str, List[str]], extensions: str = "php,html,js,txt") -> str:
     """
     Performs directory and file discovery on a web server using dirsearch.
     Args:
-        url (str): The target URL.
+        url (Union[str, List[str]]): The target URL or a list of target URLs.
         extensions (str): Comma-separated list of extensions to check (default: php,html,js,txt).
     """
-    print(f"[*] Recon Agent executing dirsearch on {url}...")
+    targets = [url] if isinstance(url, str) else url
+    
+    # Filter targets that were already run
+    new_targets = [t for t in targets if not is_already_run("dirsearch", t)]
+    
+    if not new_targets:
+        return f"All {len(targets)} targets have already been scanned by dirsearch."
+
+    print(f"[*] Executing dirsearch on {len(new_targets)} targets...")
     out_file = 'dirsearch_out.json'
+    targets_file = 'dirsearch_targets.txt'
     
     if os.path.exists(out_file):
         os.remove(out_file)
         
     try:
-        # Run dirsearch with JSON output
-        # --format json: output in JSON format
-        # -o: output file
-        # -e: extensions
-        # --random-user-agent: use a random UA
-        # --quiet-mode: reduce output noise
-        result = subprocess.run(
+        # If multiple targets, use a temporary file
+        if len(new_targets) > 1:
+            with open(targets_file, 'w') as f:
+                f.write("\n".join(new_targets))
+            cmd_targets = ['-l', targets_file]
+        else:
+            cmd_targets = ['-u', new_targets[0]]
+
+        # Run dirsearch
+        subprocess.run(
             [
-                'dirsearch', '-u', url, 
+                'dirsearch'
+            ] + cmd_targets + [
                 '-e', extensions, 
                 '--format', 'json', 
                 '-o', out_file,
@@ -381,33 +447,50 @@ def run_dirsearch_tool(url: str, extensions: str = "php,html,js,txt") -> str:
             with open(out_file, 'r') as f:
                 try:
                     data = json.load(f)
-                    # dirsearch JSON structure: {"results": [...]} or sometimes different in older versions
-                    # In modern dirsearch, it's often a map of metadata + 'results' list
-                    # Let's handle the results accurately
-                    results = data.get("results", [])
-                    for res in results:
-                        status = res.get("status")
-                        if status in [200, 301, 302]:
-                            findings.append({
-                                "url": res.get("url"),
-                                "status": status,
-                                "content-length": res.get("content-length"),
-                                "path": res.get("path")
-                            })
+                    
+                    # Dirsearch JSON structure for bulk scans:
+                    # Sometimes it's a dict with 'results' key, or a dict where keys are targets.
+                    # We'll try to find any 'status' items in the hierarchy.
+                    
+                    def extract_results(d):
+                        if isinstance(d, dict):
+                            if "status" in d and "path" in d:
+                                status = d.get("status")
+                                if status in [200, 301, 302]:
+                                    findings.append({
+                                        "url": d.get("url", "unknown"),
+                                        "status": status,
+                                        "content-length": d.get("content-length"),
+                                        "path": d.get("path")
+                                    })
+                            for v in d.values():
+                                extract_results(v)
+                        elif isinstance(d, list):
+                            for item in d:
+                                extract_results(item)
+
+                    extract_results(data)
                 except json.JSONDecodeError:
                     print("[!] Error decoding dirsearch JSON output.")
-                    
+            
+            # Mark all targets as run
+            for target in new_targets:
+                mark_as_run("dirsearch", target)
+                
             if findings:
                 update_db("interesting_files", findings)
                 # Return a summary to the LLM
-                summary = "\n".join([f"Found: {f['path']} (Status: {f['status']})" for f in findings[:10]])
+                summary = "\n".join([f"Found: {f['url']} (Status: {f['status']})" for f in findings[:10]])
                 if len(findings) > 10:
                     summary += f"\n... and {len(findings) - 10} more."
                 return f"Dirsearch complete. Added {len(findings)} findings to DB.\nRecent discoveries:\n{summary}"
                 
-        return "Dirsearch finished with 0 interesting findings."
+        return f"Dirsearch finished on {len(new_targets)} targets with 0 interesting findings."
 
     except FileNotFoundError:
         return "[!] dirsearch binary not found! Make sure it's installed and in your PATH."
     except Exception as e:
         return f"Dirsearch Error: {str(e)}"
+    finally:
+        if os.path.exists(targets_file):
+            os.remove(targets_file)

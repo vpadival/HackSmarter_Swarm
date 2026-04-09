@@ -11,7 +11,8 @@ from tools import (
     format_scope_tool, run_subfinder_tool, run_nmap_tool, run_wpscan_tool,
     run_nuclei_tool, execute_curl_request, filter_live_targets_httpx,
     run_nc_banner_grab, run_ssh_audit, run_hydra_check,
-    run_testssl_verification, run_dirsearch_tool, DB_PATH, update_db
+    run_testssl_verification, run_dirsearch_tool, DB_PATH, update_db,
+    is_already_run, mark_as_run
 )
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -186,14 +187,11 @@ def vuln_node(state: PentestState):
         return {"current_phase": "vuln_complete"}
 
     # ==========================================
-    # THE SCAN LEDGER (NEW)
+    # THE SCAN LEDGER (UPDATED)
     # ==========================================
-    db = get_db_data()
-    scanned_targets = db.get("scanned_targets", [])
-    
     # Filter out targets we've already scanned in previous loops
-    new_targets = [url for url in live_targets if url not in scanned_targets]
-
+    new_targets = [url for url in live_targets if not is_already_run("nuclei", url)]
+    
     excluded = [e.lower() for e in state.get("excluded_tools", [])]
     if "nuclei" in excluded or "run_nuclei_tool" in excluded:
         print("[!] Tool Exclusion: Skipping automated Nuclei scan.")
@@ -205,12 +203,28 @@ def vuln_node(state: PentestState):
         print(f"[*] Executing Nuclei on {len(new_targets)} NEW live targets...")
         
         # 2. Aggregated Execution: Run Nuclei ONCE on all new targets
-        # This allows Nuclei to manage its own rate limit across the entire set.
         run_nuclei_tool.invoke({"targets": new_targets})
             
-        # Log these new targets to the DB so we never scan them again
-        update_db("scanned_targets", new_targets)
+        # Log these new targets to the ledger
+        for target in new_targets:
+            mark_as_run("nuclei", target)
         
+    # ==========================================
+    # THE DIRSEARCH BULK DISCOVERY (NEW)
+    # ==========================================
+    # Filter for targets not yet scanned by dirsearch
+    dirsearch_targets = [url for url in live_targets if not is_already_run("dirsearch", url)]
+    
+    if "dirsearch" in excluded or "run_dirsearch_tool" in excluded:
+        print("[!] Tool Exclusion: Skipping automated dirsearch scan.")
+        dirsearch_targets = []
+        
+    if dirsearch_targets:
+        print(f"[*] Executing Bulk Dirsearch on {len(dirsearch_targets)} targets...")
+        run_dirsearch_tool.invoke({"url": dirsearch_targets})
+    else:
+        print(f"[-] All {len(live_targets)} live targets have already been scanned by dirsearch. Skipping.")
+
     # 3. Pull the combined results from the Database
     # (Refresh the DB object since run_nuclei_tool may have just updated it)
     db = get_db_data()
