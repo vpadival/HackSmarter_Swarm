@@ -82,7 +82,10 @@ if __name__ == "__main__":
     print("[*] Initializing the Hack Smarter Swarm...")
 
     # 1. Handle Arguments
-    parser = argparse.ArgumentParser(description="Hack Smarter AI Swarm. Built to assist, not replace.")
+    parser = argparse.ArgumentParser(
+        description="Hack Smarter AI Swarm. Built to assist, not replace.\nLearn ethical hacking @ hacksmarter.org",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument("-t", "--target", required=True, help="Target(s) or file path")
     parser.add_argument("-x", "--exclude", help="Comma-separated list of tools to exclude (e.g., nuclei,nmap)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output for tools")
