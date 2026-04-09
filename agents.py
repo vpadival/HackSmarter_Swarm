@@ -31,10 +31,26 @@ class StrategyDecision(BaseModel):
 
 def get_db_data():
     """Helper to read the current findings from disk."""
+    # Default structure to ensure all state keys exist
+    default_db = {
+        "subdomains": [], 
+        "open_ports": [], 
+        "vulnerabilities": [],
+        "interesting_files": [],
+        "scanned_targets": [],
+        "tool_runs": {}
+    }
+    
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "r") as f:
-            return json.load(f)
-    return {"subdomains": [], "open_ports": [], "vulnerabilities": []}
+            try:
+                data = json.load(f)
+                # Merge loaded data into the default structure
+                default_db.update(data)
+                return default_db
+            except json.JSONDecodeError:
+                pass
+    return default_db
 
 def filter_tools(tools: list, excluded_names: list) -> list:
     """Filters a list of tools based on excluded substrings."""

@@ -9,13 +9,15 @@ from typing import Union, List
 DB_PATH = "pentest_db.json"
 
 def update_db(key: str, new_data: list):
-    """Utility to persist data to a local JSON file."""
-    db = {"subdomains": [], "open_ports": [], "vulnerabilities": []}
+    # Default structure
+    db = {"subdomains": [], "open_ports": [], "vulnerabilities": [], "interesting_files": [], "tool_runs": {}}
     
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "r") as f:
             try:
-                db = json.load(f)
+                # Merge existing data into the default structure
+                existing_db = json.load(f)
+                db.update(existing_db)
             except json.JSONDecodeError:
                 pass
 
@@ -45,11 +47,12 @@ def is_already_run(tool_name: str, target: str) -> bool:
 
 def mark_as_run(tool_name: str, target: str):
     """Marks a tool as having been run against a target."""
-    db = {"tool_runs": {}}
+    db = {"subdomains": [], "open_ports": [], "vulnerabilities": [], "interesting_files": [], "tool_runs": {}}
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "r") as f:
             try:
-                db = json.load(f)
+                existing_db = json.load(f)
+                db.update(existing_db)
             except json.JSONDecodeError:
                 pass
     
