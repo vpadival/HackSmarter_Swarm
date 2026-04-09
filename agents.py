@@ -35,6 +35,22 @@ def get_db_data():
             return json.load(f)
     return {"subdomains": [], "open_ports": [], "vulnerabilities": []}
 
+def filter_tools(tools: list, excluded_names: list) -> list:
+    """Filters a list of tools based on excluded substrings."""
+    if not excluded_names:
+        return tools
+    
+    filtered = []
+    for tool in tools:
+        # Check if any excluded string is in the tool's name
+        should_exclude = any(name.lower() in tool.name.lower() for name in excluded_names)
+        if not should_exclude:
+            filtered.append(tool)
+        else:
+            print(f"[!] Tool Exclusion: Skipping tool '{tool.name}'")
+            
+    return filtered
+
 def strategy_node(state: PentestState):
     print("\n--- [NODE: STRATEGY & REPORTING] ---")
     
@@ -101,7 +117,8 @@ def strategy_node(state: PentestState):
 def recon_node(state: PentestState):
     print("\n--- [NODE: TACTICAL RECON] ---")
     
-    recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool, run_dirsearch_tool]
+    initial_recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool, run_dirsearch_tool]
+    recon_tools = filter_tools(initial_recon_tools, state.get("excluded_tools", []))
     directives = state.get("strategy_directives") or "Perform initial discovery on the target."
     
     system_prompt = (
@@ -177,6 +194,11 @@ def vuln_node(state: PentestState):
     # Filter out targets we've already scanned in previous loops
     new_targets = [url for url in live_targets if url not in scanned_targets]
 
+    excluded = [e.lower() for e in state.get("excluded_tools", [])]
+    if "nuclei" in excluded or "run_nuclei_tool" in excluded:
+        print("[!] Tool Exclusion: Skipping automated Nuclei scan.")
+        new_targets = []
+
     if not new_targets:
         print(f"[-] All {len(live_targets)} live targets have already been scanned by Nuclei. Skipping heavy scan.")
     else:
@@ -204,14 +226,15 @@ def vuln_node(state: PentestState):
     print(f"[*] DB holds {len(current_vulns)} potential issues. Waking up Gemini for verification...")
 
     # 4. LLM Execution: Verify Findings
-    verification_tools = [
-    execute_curl_request, 
-    run_nmap_tool, 
-    run_nc_banner_grab, 
-    run_ssh_audit, 
-    run_hydra_check, 
-    run_testssl_verification
-]
+    initial_verification_tools = [
+        execute_curl_request, 
+        run_nmap_tool, 
+        run_nc_banner_grab, 
+        run_ssh_audit, 
+        run_hydra_check, 
+        run_testssl_verification
+    ]
+    verification_tools = filter_tools(initial_verification_tools, state.get("excluded_tools", []))
     
     system_prompt = (
     "You are a Senior Penetration Tester. Your goal is to verify findings.\n\n"

@@ -85,6 +85,10 @@ python hacksmarter.py -t "example.com, 192.168.1.1"
 
 # Target File
 python hacksmarter.py -t scope.txt
+
+# Excluding Tools
+# Skip specific tools like nuclei, nmap, or wpscan
+python hacksmarter.py -t example.com -x nuclei,nmap
 ```
 
 ---

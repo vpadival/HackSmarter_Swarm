@@ -84,10 +84,14 @@ if __name__ == "__main__":
     # 1. Handle Arguments
     parser = argparse.ArgumentParser(description="Hack Smarter AI Swarm. Built to assist, not replace.")
     parser.add_argument("-t", "--target", required=True, help="Target(s) or file path")
+    parser.add_argument("-x", "--exclude", help="Comma-separated list of tools to exclude (e.g., nuclei,nmap)")
     args = parser.parse_args()
 
     targets = parse_targets(args.target)
+    excluded_tools = [t.strip() for t in args.exclude.split(',')] if args.exclude else []
     print(f"[*] Loaded {len(targets)} target(s).")
+    if excluded_tools:
+        print(f"[*] Tool Exclusions: {', '.join(excluded_tools)}")
 
     # 2. Iterate through targets
     for index, target in enumerate(targets):
@@ -101,6 +105,7 @@ if __name__ == "__main__":
             "last_vuln_count": -1,
             "current_phase": "start",
             "strategy_directives": "",
+            "excluded_tools": excluded_tools,
             "markdown_report": "",
             "dradis_json": {}
         }
