@@ -3,6 +3,8 @@
 **Author:** Tyler Ramsbey  
 **Organizations:** [Kairos Sec](https://kairos-sec.com) | [Hack Smarter](https://hacksmarter.org)
 
+> Note from Tyler: I wouldn't use this in a client environment (yet). This initially started as a small project because I wanted to learn LangGraph; but I decide to expand it and make it available for others to learn from. I'll be adding to it extensively in the near future. 
+
 ## Overview
 Hack Smarter Swarm is a multi-agent AI penetration testing assistant built to **assist (not replace)** ethical hackers and security professionals. Powered by [LangGraph](https://python.langchain.com/docs/langgraph/) and Gemini, the swarm acts as your automated reconnaissance and initial vulnerability assessment assistant.
 
