@@ -11,7 +11,7 @@ from tools import (
     format_scope_tool, run_subfinder_tool, run_nmap_tool, run_wpscan_tool,
     run_nuclei_tool, execute_curl_request, filter_live_targets_httpx,
     run_nc_banner_grab, run_ssh_audit, run_hydra_check,
-    run_testssl_verification, DB_PATH, update_db
+    run_testssl_verification, run_dirsearch_tool, DB_PATH, update_db
 )
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -42,6 +42,7 @@ def strategy_node(state: PentestState):
     current_subdomains = state.get("subdomains", [])
     current_ports = state.get("open_ports", [])
     current_vulns = state.get("vulnerabilities", [])
+    current_files = state.get("interesting_files", [])
     
     current_vuln_count = len(current_vulns)
     last_count = state.get("last_vuln_count", -1) # Default to -1 on the very first pass
@@ -100,12 +101,13 @@ def strategy_node(state: PentestState):
 def recon_node(state: PentestState):
     print("\n--- [NODE: TACTICAL RECON] ---")
     
-    recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool]
+    recon_tools = [run_subfinder_tool, run_nmap_tool, format_scope_tool, run_wpscan_tool, run_dirsearch_tool]
     directives = state.get("strategy_directives") or "Perform initial discovery on the target."
     
     system_prompt = (
         f"You are a Tactical Recon Specialist. Current objective: {directives}\n"
         "Analyze the target, find subdomains, scan for ports, and check for WordPress vulnerabilities. "
+        "If you identify a live web server, you should also perform directory discovery using dirsearch. "
         "When you are finished, summarize what you found."
     )
 
@@ -125,6 +127,7 @@ def recon_node(state: PentestState):
     return {
         "subdomains": db["subdomains"],
         "open_ports": db["open_ports"],
+        "interesting_files": db.get("interesting_files", []),
         "current_phase": "recon_conducted"
     }
 

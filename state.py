@@ -17,6 +17,7 @@ class PentestState(TypedDict):
     subdomains: Annotated[List[str], merge_unique]
     open_ports: Annotated[List[dict], merge_unique]
     vulnerabilities: Annotated[List[dict], merge_unique]
+    interesting_files: Annotated[List[dict], merge_unique]
     
     current_phase: str
     strategy_directives: str

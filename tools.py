@@ -342,3 +342,72 @@ def run_wpscan_tool(target_url: str) -> str:
         return "[!] WPScan binary not found! Make sure it is installed and in your PATH."
     except Exception as e:
         return f"WPScan Error: {str(e)}"
+
+@tool
+def run_dirsearch_tool(url: str, extensions: str = "php,html,js,txt") -> str:
+    """
+    Performs directory and file discovery on a web server using dirsearch.
+    Args:
+        url (str): The target URL.
+        extensions (str): Comma-separated list of extensions to check (default: php,html,js,txt).
+    """
+    print(f"[*] Recon Agent executing dirsearch on {url}...")
+    out_file = 'dirsearch_out.json'
+    
+    if os.path.exists(out_file):
+        os.remove(out_file)
+        
+    try:
+        # Run dirsearch with JSON output
+        # --format json: output in JSON format
+        # -o: output file
+        # -e: extensions
+        # --random-user-agent: use a random UA
+        # --quiet-mode: reduce output noise
+        result = subprocess.run(
+            [
+                'dirsearch', '-u', url, 
+                '-e', extensions, 
+                '--format', 'json', 
+                '-o', out_file,
+                '--random-user-agent',
+                '--quiet-mode'
+            ],
+            capture_output=True, text=True, check=False
+        )
+        
+        findings = []
+        if os.path.exists(out_file):
+            with open(out_file, 'r') as f:
+                try:
+                    data = json.load(f)
+                    # dirsearch JSON structure: {"results": [...]} or sometimes different in older versions
+                    # In modern dirsearch, it's often a map of metadata + 'results' list
+                    # Let's handle the results accurately
+                    results = data.get("results", [])
+                    for res in results:
+                        status = res.get("status")
+                        if status in [200, 301, 302]:
+                            findings.append({
+                                "url": res.get("url"),
+                                "status": status,
+                                "content-length": res.get("content-length"),
+                                "path": res.get("path")
+                            })
+                except json.JSONDecodeError:
+                    print("[!] Error decoding dirsearch JSON output.")
+                    
+            if findings:
+                update_db("interesting_files", findings)
+                # Return a summary to the LLM
+                summary = "\n".join([f"Found: {f['path']} (Status: {f['status']})" for f in findings[:10]])
+                if len(findings) > 10:
+                    summary += f"\n... and {len(findings) - 10} more."
+                return f"Dirsearch complete. Added {len(findings)} findings to DB.\nRecent discoveries:\n{summary}"
+                
+        return "Dirsearch finished with 0 interesting findings."
+
+    except FileNotFoundError:
+        return "[!] dirsearch binary not found! Make sure it's installed and in your PATH."
+    except Exception as e:
+        return f"Dirsearch Error: {str(e)}"

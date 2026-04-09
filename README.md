@@ -60,6 +60,7 @@ The AI interacts with the following command-line binaries. Ensure they are insta
 - [Hydra](https://github.com/vanhauser-thc/thc-hydra)
 - [WPScan](https://github.com/wpscantech/wpscan)
 - [testssl.sh](https://testssl.sh/)
+- [dirsearch](https://github.com/maurosoria/dirsearch)
 
 ### Environment Variables
 You need a Google Gemini API Key. Ensure it is placed in a `.env` file in the root of the project:
