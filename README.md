@@ -8,7 +8,7 @@ Hack Smarter Swarm is a multi-agent AI penetration testing assistant built to **
 
 It orchestrates industry-standard open-source tools to autonomously map attack surfaces, verify live web servers, probe for vulnerabilities, and eliminate false positives, saving you time and giving you a head-start on deeper, manual exploitation.
 
-<img width="70%" alt="image" src="https://github.com/user-attachments/assets/1c3ee63a-1ea2-454b-9904-8af6553db62f" />
+<img width="70%" alt="image" src="https://github.com/user-attachments/assets/e5f3694b-34c2-4739-8f56-5b9161da8d22" />
 
 ## The Philosophy: Assisting, NEVER Replacing
 Unlike many open-source projects that chase full autonomy or try to completely abstract away the human element with a "black box" hack button, this swarm is built purely to be an **assistant**. It handles the tedious, time-consuming tasks: 
@@ -22,6 +22,8 @@ You get a clean, validated `dradis_import.json` and a Markdown report with concr
 1. **Not Just a Chatbot**: It's an agentic loop driving real CLI tools via subprocesses in your terminal -- not just a web UI where you manually copy and paste scan outputs.
 2. **False-Positive Elimination**: Many AI tools blindly trust vulnerability scanners, resulting in bloated, noisy reports. The Swarm explicitly uses `Verification Agents` armed with tools like `curl`, `nc`, and `hydra` to confirm a finding before considering it real.
 3. **Local State Management**: Operations run with a persistent `pentest_db.json` ledger, ensuring loops and pivoting strategies are based on unified, deduplicated data.
+
+<img width="70%" alt="image" src="https://github.com/user-attachments/assets/1c3ee63a-1ea2-454b-9904-8af6553db62f" />
 
 ## Features
 - **Multi-Agent Architecture**:
