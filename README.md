@@ -10,7 +10,7 @@ Hack Smarter Swarm is a multi-agent AI penetration testing assistant built to **
 
 It orchestrates industry-standard open-source tools to autonomously map attack surfaces, verify live web servers, probe for vulnerabilities, and eliminate false positives, saving you time and giving you a head-start on deeper, manual exploitation.
 
-<img width="70%" alt="image" src="https://github.com/user-attachments/assets/e5f3694b-34c2-4739-8f56-5b9161da8d22" />
+<img width="1104" height="346" alt="image" src="https://github.com/user-attachments/assets/10d8f406-d4ce-4c7c-a056-ce42e00e7f58" />
 
 #### Changing the LLM Model
 Hack Smarter Swarm is built using Gemini, but since it uses LangChain, it is very easy to swap to another model provider (like OpenAI or Anthropic).
