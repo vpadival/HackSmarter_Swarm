@@ -14,6 +14,7 @@ from tools import (
     run_testssl_verification, run_feroxbuster_tool, run_httpx_tool, add_vulnerability_tool, DB_PATH, update_db,
     is_already_run, mark_as_run
 )
+import tools # Added to support tools.OUTPUT_DIR and tools.DB_PATH
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
