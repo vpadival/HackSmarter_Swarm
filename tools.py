@@ -231,7 +231,7 @@ def run_nuclei_tool(targets: list, verbose: bool = False) -> str:
         cmd = [
             'nuclei', 
             '-je', out_file, 
-            '-severity', 'medium,high,critical',
+            '-severity', 'low,medium,high,critical',
             '-exclude-tags', 'dos,fuzz',  # CRITICAL: Exclude templates that crash or overload servers
             '-rl', '5',                   # Hard throttle: Maximum 5 requests per second 
             '-c', '5',                    # Concurrency: Only 5 active templates at a time
