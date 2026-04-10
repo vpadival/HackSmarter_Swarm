@@ -6,6 +6,7 @@ import sys
 import threading
 import queue
 import time
+import psutil # Added for subprocess management
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit
 from hacksmarter import run_swarm, parse_targets
@@ -62,7 +63,17 @@ def get_report(client):
 def handle_skip_task():
     import tools
     tools.SKIP_CURRENT_TASK = True
-    emit('log', {'data': '[!] USER SIGNAL: Requesting skip of current task...'})
+    
+    # Forcefully terminate any subprocesses spawned by the swarm (nmap, ferox, etc.)
+    try:
+        parent = psutil.Process()
+        for child in parent.children(recursive=True):
+            if child.pid != os.getpid():
+                child.terminate()
+    except Exception as e:
+        print(f"[!] Error skipping: {e}")
+        
+    emit('log', {'data': '[!] USER SIGNAL: Terminating current task subprocesses...'})
 
 @socketio.on('start_swarm')
 def handle_start_swarm(data):
