@@ -161,10 +161,9 @@ def run_subfinder_tool(domain: str) -> str:
         # Parse plain text output (one subdomain per line)
         subdomains = [line.strip() for line in output.split('\n') if line.strip()]
                 
-        # Persist to the shared DB
         update_db("subdomains", subdomains)
         mark_as_run("subfinder", domain)
-        return f"Subfinder scan successful. Found {len(subdomains)} subdomains and added them to the database."
+        return f"Subfinder scan successful for {domain}. Found {len(subdomains)} subdomains: {', '.join(subdomains)}"
         
     except subprocess.CalledProcessError as e:
         return f"Subfinder command failed. Error: {e.stderr}"
@@ -201,7 +200,8 @@ def run_nmap_tool(target: str) -> list:
                         
         update_db("open_ports", open_ports)
         mark_as_run("nmap", target)
-        return f"Successfully updated DB with {len(open_ports)} ports for {target}."
+        ports_list = [p['port'] for p in open_ports]
+        return f"Nmap successful for {target}. Found {len(open_ports)} open ports: {', '.join(ports_list)}"
     except subprocess.CalledProcessError as e:
         return [{"error": f"Nmap failed: {e.stderr}"}]
 

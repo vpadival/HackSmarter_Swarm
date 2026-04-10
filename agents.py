@@ -146,12 +146,14 @@ def recon_node(state: PentestState):
 
     system_prompt = (
         f"You are a Tactical Recon Specialist. Current objective: {directives}\n"
-        "Analyze the target, find subdomains, scan for ports, and check for WordPress vulnerabilities. "
-        "CRITICAL: Do NOT guess or hallucinate subdomains. ONLY scan the primary target and subdomains "
-        "that have been explicitly discovered by subfinder or are in the known list below."
-        f"{subdomain_context}\n"
-        "Use run_httpx_tool to verify if a discovered subdomain or port is hosting a live web server "
+        "Analyze the target, find subdomains, scan for ports, and check for WordPress vulnerabilities.\n\n"
+        "### STRICT OPERATIONAL RULES ###\n"
+        "1. NO GUESSING: You must ONLY scan the primary target and subdomains that were returned by subfinder. "
+        "Do NOT assume subdomains like 'dev', 'internal', or 'test' exist unless subfinder actually found them.\n"
+        "2. VERIFY BEFORE SCANNING: Use run_httpx_tool to verify if a discovered subdomain or port is hosting a live web server "
         "BEFORE attempting to run feroxbuster or wpscan on it.\n"
+        "3. SUBDOMAIN CONTEXT: Rely on the tools' output. If subfinder returns 0 subdomains, then you only have the primary target to scan.\n"
+        f"{subdomain_context}\n"
         "If you identify a live web server, you should also perform directory discovery using feroxbuster. "
         "When you are finished, summarize what you found."
     )
