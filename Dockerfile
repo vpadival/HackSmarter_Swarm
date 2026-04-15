@@ -43,9 +43,5 @@ COPY . .
 # Ensure signal handling works correctly (Forwarding SIGINT)
 STOPSIGNAL SIGINT
 
-# Expose the web GUI port
-EXPOSE 1337
-
-# Set the default command to run the web GUI
-# Users can still run the CLI by overriding the entrypoint target
-ENTRYPOINT ["python3", "web_app.py"]
+# Set the default command to run the CLI
+ENTRYPOINT ["python3", "hacksmarter.py"]

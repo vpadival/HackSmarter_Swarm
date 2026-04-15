@@ -60,14 +60,7 @@ docker run --rm -it \
   hacksmarter -t example.com -c My_Client -v
 ```
 
-### 3. (Optional) Launch the Web Server for a GUI
-```bash
-docker run --rm -it \
-  -p 1337:1337 \
-  -v $(pwd)/.env:/app/.env \
-  -v $(pwd)/clients:/app/clients \
-  hacksmarter
-```
+
 
 ## Prerequisites
 
