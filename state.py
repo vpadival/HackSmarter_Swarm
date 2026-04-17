@@ -22,6 +22,7 @@ class PentestState(TypedDict):
     open_ports: Annotated[List[dict], _merge_unique]
     vulnerabilities: Annotated[List[dict], _merge_unique]
     interesting_files: Annotated[List[dict], _merge_unique]
+    leaked_credentials: Annotated[List[dict], _merge_unique]
     excluded_tools: List[str]
     verbose: bool
 

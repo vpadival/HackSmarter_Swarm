@@ -81,6 +81,8 @@ _SENSITIVE_ENV_KEYS = frozenset({
     "ANTHROPIC_API_KEY",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_ACCESS_KEY_ID",
+    "DEHASHED_API_KEY",
+    "DEHASHED_EMAIL",
 })
 
 
@@ -113,6 +115,11 @@ def init_db():
     c.execute(
         "CREATE TABLE IF NOT EXISTS interesting_files "
         "(target TEXT, url TEXT, status INTEGER, comment TEXT, UNIQUE(target, url))"
+    )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS leaked_credentials "
+        "(domain TEXT, email TEXT, username TEXT, password TEXT, hashed_password TEXT, "
+        "source TEXT, UNIQUE(domain, email, password))"
     )
     c.execute(
         "CREATE TABLE IF NOT EXISTS tool_runs "
@@ -158,6 +165,21 @@ def update_db(key: str, new_data: list):
                         v.get("severity"),
                         v.get("description"),
                         v.get("poc", ""),
+                    ),
+                )
+        elif key == "leaked_credentials":
+            for item in new_data:
+                c.execute(
+                    "INSERT OR IGNORE INTO leaked_credentials "
+                    "(domain, email, username, password, hashed_password, source) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        item.get("domain", ""),
+                        item.get("email", ""),
+                        item.get("username", ""),
+                        item.get("password", ""),
+                        item.get("hashed_password", ""),
+                        item.get("source", ""),
                     ),
                 )
         elif key == "interesting_files":
@@ -817,3 +839,116 @@ def run_feroxbuster_tool(
                 f"{len(all_findings)} interesting files found."
             )
         return f"Feroxbuster finished on {len(new_targets)} targets — 0 findings."
+
+
+@tool
+def run_dehashed_tool(domain: str) -> str:
+    """
+    Query the Dehashed API for leaked credentials associated with a domain.
+
+    Requires DEHASHED_EMAIL and DEHASHED_API_KEY environment variables.
+    Results (email, username, plaintext password, hashed password, source
+    database) are stored in the leaked_credentials table and returned as a
+    summary.  Only domain-scoped queries are made — no out-of-scope lookups.
+
+    Args:
+        domain: The target domain to search (e.g. 'example.com').
+    """
+    import urllib.request
+    import urllib.parse
+    import base64
+
+    try:
+        _assert_in_scope(domain)
+    except ValueError as exc:
+        return f"[SCOPE BLOCK] {exc}"
+
+    if is_already_run("dehashed", domain):
+        return f"[SKIP] Dehashed already queried for {domain}."
+
+    dehashed_email = os.environ.get("DEHASHED_EMAIL", "").strip()
+    dehashed_api_key = os.environ.get("DEHASHED_API_KEY", "").strip()
+
+    if not dehashed_email or not dehashed_api_key:
+        return (
+            "[SKIP] Dehashed credentials not configured. "
+            "Set DEHASHED_EMAIL and DEHASHED_API_KEY in your .env file."
+        )
+
+    logger.info("Querying Dehashed for domain: %s", domain)
+
+    # Bare domain without protocol for the query
+    bare_domain = re.sub(r"^https?://", "", domain).split("/")[0].split(":")[0]
+    query = urllib.parse.quote(bare_domain)
+    url = f"https://api.dehashed.com/search?query=domain%3A{query}&size=100"
+
+    credentials_b64 = base64.b64encode(
+        f"{dehashed_email}:{dehashed_api_key}".encode()
+    ).decode()
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Basic {credentials_b64}",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+            raw = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        mark_as_run("dehashed", domain)
+        if exc.code == 401:
+            return "[ERROR] Dehashed: invalid credentials (401). Check DEHASHED_EMAIL / DEHASHED_API_KEY."
+        if exc.code == 302:
+            return "[ERROR] Dehashed: subscription required or account issue (302)."
+        return f"[ERROR] Dehashed HTTP {exc.code}: {exc.reason}"
+    except urllib.error.URLError as exc:
+        return f"[ERROR] Dehashed network error: {exc.reason}"
+    except Exception as exc:
+        return f"[ERROR] Dehashed unexpected error: {exc}"
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        mark_as_run("dehashed", domain)
+        return f"[ERROR] Dehashed returned non-JSON response: {exc}"
+
+    entries = data.get("entries") or []
+    total = data.get("total", len(entries))
+
+    if not entries:
+        mark_as_run("dehashed", domain)
+        return f"Dehashed: no leaked credentials found for {bare_domain}."
+
+    credentials = []
+    for entry in entries:
+        credentials.append({
+            "domain": bare_domain,
+            "email": entry.get("email", ""),
+            "username": entry.get("username", ""),
+            "password": entry.get("password", ""),
+            "hashed_password": entry.get("hashed_password", ""),
+            "source": entry.get("database_name", ""),
+        })
+
+    update_db("leaked_credentials", credentials)
+    mark_as_run("dehashed", domain)
+
+    # Build a concise summary (avoid logging raw passwords at INFO level)
+    with_plaintext = sum(1 for c in credentials if c.get("password"))
+    with_hash = sum(1 for c in credentials if c.get("hashed_password"))
+
+    logger.info(
+        "Dehashed found %d entries for %s (%d plaintext, %d hashed).",
+        len(credentials), bare_domain, with_plaintext, with_hash,
+    )
+
+    return (
+        f"Dehashed results for {bare_domain}: {total} total records found "
+        f"(showing {len(credentials)}). "
+        f"{with_plaintext} have plaintext passwords, {with_hash} have hashed passwords. "
+        f"All stored in leaked_credentials table. "
+        f"Sample sources: {', '.join(set(c['source'] for c in credentials if c['source']))[:200]}"
+    )

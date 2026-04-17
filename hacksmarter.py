@@ -195,6 +195,7 @@ def run_swarm(
             "open_ports": [],
             "vulnerabilities": [],
             "interesting_files": [],
+            "leaked_credentials": [],
             "last_vuln_count": -1,
             "current_phase": "start",
             "strategy_directives": "",
