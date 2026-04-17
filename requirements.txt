@@ -14,3 +14,4 @@ python-dotenv>=1.0.0
 # Pentesting Tools
 ssh-audit
 tqdm>=4.66.0
+defusedxml>=0.7.1

@@ -25,6 +25,7 @@ from agents import recon_node, strategy_node, vuln_node
 from state import PentestState
 import tools
 from tools import set_allowed_scope
+from nessus_parser import parse_nessus_file, seed_db_from_nessus
 
 # ---------------------------------------------------------------------------
 # Logging setup (called from __main__ after args are parsed)
@@ -134,6 +135,7 @@ def run_swarm(
     excluded_tools: list,
     client_name: str = None,
     verbose: bool = False,
+    nessus_file: str = None,
 ):
     """Run the AI swarm against the provided target list."""
     if excluded_tools:
@@ -149,6 +151,38 @@ def run_swarm(
 
     # FIX: register the authorised scope BEFORE any tool is invoked
     set_allowed_scope(targets)
+
+    # ------------------------------------------------------------------
+    # Optional: seed the database from a .nessus file before scanning
+    # ------------------------------------------------------------------
+    if nessus_file:
+        logger.info("Loading Nessus baseline from: %s", nessus_file)
+        try:
+            nessus_result = parse_nessus_file(nessus_file)
+            summary = seed_db_from_nessus(nessus_result)
+            logger.info(
+                "Nessus import complete — %d host(s), %d port(s), "
+                "%d vuln(s) seeded into DB.",
+                summary["hosts"],
+                summary["open_ports"],
+                summary["vulnerabilities"],
+            )
+            # Extend scope to include any hosts discovered in the Nessus file
+            # that aren't already in the target list (e.g. extra IPs/FQDNs).
+            nessus_targets = [
+                t for t in nessus_result.targets if t not in targets
+            ]
+            if nessus_targets:
+                logger.info(
+                    "Extending scope with %d host(s) from Nessus file: %s",
+                    len(nessus_targets),
+                    nessus_targets,
+                )
+                targets = targets + nessus_targets
+                set_allowed_scope(targets)
+        except (FileNotFoundError, ValueError) as exc:
+            logger.error("Failed to load Nessus file: %s", exc)
+            raise SystemExit(1) from exc
 
     for index, target in enumerate(targets):
         logger.info("=" * 40)
@@ -222,6 +256,17 @@ if __name__ == "__main__":
         "-c", "--client",
         help="Client name — organises all output under clients/<name>/.",
     )
+    parser.add_argument(
+        "-n", "--nessus",
+        metavar="FILE",
+        help=(
+            "Path to a .nessus export file. Findings are seeded into the DB "
+            "as a baseline before the AI swarm runs, so the swarm focuses on "
+            "verifying and deepening existing findings rather than starting "
+            "from scratch. Hosts discovered in the file are added to scope "
+            "automatically."
+        ),
+    )
     args = parser.parse_args()
 
     _configure_logging(args.verbose)
@@ -232,4 +277,4 @@ if __name__ == "__main__":
     logger.info("Initialising Hack Smarter Swarm…")
     logger.info("Loaded %d target(s).", len(targets))
 
-    run_swarm(targets, excluded, args.client, args.verbose)
+    run_swarm(targets, excluded, args.client, args.verbose, args.nessus)
