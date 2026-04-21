@@ -33,6 +33,7 @@ from tools import (
     format_scope_tool,
     is_already_run,
     mark_as_run,
+    run_dehashed_tool,
     run_feroxbuster_tool,
     run_hydra_check,
     run_nc_banner_grab,
@@ -127,6 +128,7 @@ def get_db_data() -> dict:
         "open_ports": [],
         "vulnerabilities": [],
         "interesting_files": [],
+        "leaked_credentials": [],
         "tool_runs": {},
     }
 
@@ -159,6 +161,22 @@ def get_db_data() -> dict:
         c.execute("SELECT target, url, comment FROM interesting_files")
         db["interesting_files"] = [
             {"target": r[0], "url": r[1], "comment": r[2]} for r in c.fetchall()
+        ]
+
+        c.execute(
+            "SELECT domain, email, username, password, hashed_password, source "
+            "FROM leaked_credentials"
+        )
+        db["leaked_credentials"] = [
+            {
+                "domain": r[0],
+                "email": r[1],
+                "username": r[2],
+                "password": r[3],
+                "hashed_password": r[4],
+                "source": r[5],
+            }
+            for r in c.fetchall()
         ]
 
         c.execute("SELECT tool_name, target FROM tool_runs")
@@ -284,6 +302,7 @@ def recon_node(state: PentestState):
         run_wpscan_tool,
         run_feroxbuster_tool,
         run_httpx_tool,
+        run_dehashed_tool,
     ]
     recon_tools = _filter_tools(all_recon_tools, excluded)
 
@@ -297,14 +316,17 @@ def recon_node(state: PentestState):
 
     system_prompt = (
         f"You are a Tactical Recon Specialist. Current objective: {directives}\n"
-        "Find subdomains, scan ports, and check for WordPress vulnerabilities.\n\n"
+        "Find subdomains, scan ports, check for WordPress vulnerabilities, and query "
+        "Dehashed for leaked credentials associated with the target domain.\n\n"
         "### STRICT RULES ###\n"
         "1. ONLY scan the primary target and subdomains returned by subfinder.\n"
         "2. Use run_httpx_tool to verify a target is live BEFORE running feroxbuster "
         "or wpscan on it.\n"
         "3. If subfinder returns 0 subdomains, only the primary target is in scope.\n"
+        "4. Always run run_dehashed_tool on the primary target domain to check for "
+        "leaked credentials in breach databases.\n"
         f"{subdomain_ctx}\n"
-        "When finished, summarise all findings."
+        "When finished, summarise all findings including any leaked credentials."
     )
 
     agent = create_react_agent(llm, recon_tools, prompt=system_prompt)
@@ -318,6 +340,7 @@ def recon_node(state: PentestState):
         "subdomains": db["subdomains"],
         "open_ports": db["open_ports"],
         "interesting_files": db.get("interesting_files", []),
+        "leaked_credentials": db.get("leaked_credentials", []),
         "current_phase": "recon_conducted",
     }
 
